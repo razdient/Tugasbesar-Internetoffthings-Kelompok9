@@ -55,9 +55,12 @@ Sensor MPU6050 dipasang pada sabuk di punggung untuk membaca sudut kemiringan tu
 
 Lapisan IoT: Perception (MPU6050, buzzer) → Processing edge (ESP32) → Network (Wi-Fi, MQTT) → Processing server (Node-RED) → Application (dashboard).
 
-![Diagram blok](docs/Diagram_Blok_Smart_Posture_Monitor.png)
-![Flowchart](docs/Flowchart_Smart_Posture_Monitor.png)
-![Konsep](docs/Gambar_Konsep_Smart_Posture_Monitor.png)
+![Diagram blok](<img width="1700" height="640" alt="image" src="https://github.com/user-attachments/assets/c89026e8-63e7-494f-a3cb-a840a5a6b0d0" />
+)
+![Flowchart](<img width="1600" height="888" alt="image" src="https://github.com/user-attachments/assets/a71e98b1-339c-407c-bbc9-476312a5184e" />
+)
+![Konsep](<img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/ad4ed119-182a-4cda-8f8f-1d7e57e69c6e" />
+)
 
 ## Struktur Repositori
 
@@ -79,7 +82,7 @@ Lapisan IoT: Perception (MPU6050, buzzer) → Processing edge (ESP32) → Networ
 
 ## Menjalankan Simulasi
 
-Buka proyek Wokwi: [Tautan proyek Wokwi], lalu tekan tombol Play. Serial monitor menampilkan sudut dan status postur.
+Buka proyek Wokwi: [[Tautan proyek Wokwi](https://wokwi.com/projects/477124223009218561)], lalu tekan tombol Play. Serial monitor menampilkan sudut dan status postur.
 
 <div align="center">
 
