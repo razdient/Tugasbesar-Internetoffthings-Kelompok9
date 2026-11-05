@@ -28,7 +28,7 @@ Program Studi Teknik Komputer
 | No. | Nama | NIM | Peran |
 |:---:|---|:---:|---|
 | 1 | Gerard Roland K.S | H1H024047 |Perakitan hardware (sabuk, kabel, catu daya) + tuning (ambang, α, kalibrasi di tubuh nyata) |
-| 2 | Rasta Listiadi | H1H024053 Dashboard web (Node-RED atau web, tampil sudut, status, riwayat)  |
+| 2 | Rasta Listiadi | H1H024053 | Dashboard web (Node-RED atau web, tampil sudut, status, riwayat)  |
 | 3 | Fathah Ikhwansyah | H1H024063 |Firmware (logika sudut, kalibrasi, timer) + MQTT + laporan  |
 
 ---
