@@ -55,12 +55,11 @@ Sensor MPU6050 dipasang pada sabuk di punggung untuk membaca sudut kemiringan tu
 
 Lapisan IoT: Perception (MPU6050, buzzer) → Processing edge (ESP32) → Network (Wi-Fi, MQTT) → Processing server (Node-RED) → Application (dashboard).
 
-![Diagram blok](<img width="1700" height="640" alt="image" src="https://github.com/user-attachments/assets/c89026e8-63e7-494f-a3cb-a840a5a6b0d0" />
-)
-![Flowchart](<img width="1600" height="888" alt="image" src="https://github.com/user-attachments/assets/a71e98b1-339c-407c-bbc9-476312a5184e" />
-)
-![Konsep](<img width="1600" height="900" alt="image" src="https://github.com/user-attachments/assets/ad4ed119-182a-4cda-8f8f-1d7e57e69c6e" />
-)
+![Diagram blok](https://github.com/user-attachments/assets/c89026e8-63e7-494f-a3cb-a840a5a6b0d0)
+
+![Flowchart](https://github.com/user-attachments/assets/a71e98b1-339c-407c-bbc9-476312a5184e)
+
+![Konsep](https://github.com/user-attachments/assets/ad4ed119-182a-4cda-8f8f-1d7e57e69c6e)
 
 ## Struktur Repositori
 
