@@ -42,6 +42,9 @@ class MqttSubscribe extends Command
             // Subscribe topik data sensor
             $client->subscribe('posture/+/data', function ($topic, $message) {
                 try {
+                    // Tampilkan pesan asli untuk pemeriksaan
+                    $this->line("PESAN DATA SENSOR: " . $message);
+
                     // Ubah JSON menjadi object PHP
                     $data = json_decode($message);
 
@@ -113,6 +116,9 @@ class MqttSubscribe extends Command
             // Subscribe topik kejadian membungkuk
             $client->subscribe('posture/+/event', function ($topic, $message) {
                 try {
+                    // Tampilkan pesan asli untuk pemeriksaan
+                    $this->line("PESAN EVENT: " . $message);
+
                     // Ubah JSON menjadi object PHP
                     $data = json_decode($message);
 
