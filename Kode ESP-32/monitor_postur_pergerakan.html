@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monitor Postur 3D - Smart Posture Monitor</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;background:#f1f5f4;color:#1f2d30}
+.w{max-width:1040px;margin:auto;padding:16px}
+h1{font-size:20px;margin:0 0 10px}
+.row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.card{background:#fff;border-radius:12px;padding:12px;flex:1;min-width:290px;box-shadow:0 1px 3px #0002}
+canvas{width:100%;display:block}
+button{padding:8px 14px;border:0;border-radius:8px;background:#2d7f7b;color:#fff;font-size:14px;cursor:pointer;margin:2px 0}
+button.o{background:#d96620}
+.say{font-size:26px;font-weight:700;line-height:1.3;margin:10px 0 2px}
+.sub{font-size:15px;color:#4a5b5e;margin:2px 0}
+.st{display:inline-block;padding:5px 12px;border-radius:8px;color:#fff;font-weight:700;font-size:16px}
+.k2{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0;font-size:13px;color:#5c6b6e}
+.big{font-size:30px;font-weight:700;color:#1f2d30}
+.cal{background:#eef4f3;border-radius:8px;padding:8px;margin:8px 0;font-size:14px;line-height:1.7}
+label{display:block;font-size:13px;margin-top:6px}
+input[type=range]{width:100%}
+pre{background:#12282c;color:#cfe;padding:8px;border-radius:8px;font-size:12px;min-height:170px;margin:0;overflow:auto}
+small{color:#5c6b6e}
+</style></head><body><div class="w">
+<h1>Monitor Postur 3D: ke mana sensor miring, dan berapa derajat</h1>
+<div class="row"><div class="card">
+<button id="bs" class="o">Mode simulasi</button> <button id="bc">Sambung ke ESP32 (USB)</button>
+<div class="say" id="say">Badan LURUS (0°)</div>
+<div class="sub" id="jam"></div><div class="sub" id="yw"></div><div class="sub" id="cs" style="font-weight:600"></div>
+<div style="margin:8px 0"><span id="st" class="st" style="background:#3d9a5b">NORMAL</span></div>
+<div class="k2"><div>Depan (+) / Belakang (&minus;)<div class="big" id="bp">0&deg;</div></div>
+<div>Kanan (+) / Kiri (&minus;)<div class="big" id="br">0&deg;</div></div>
+<div>Putar kanan (+) / kiri (&minus;)<div class="big" id="by">0&deg;</div></div>
+<div>Timer 10 detik<div class="big" id="vt">-</div></div></div>
+<div class="cal"><b>Titik 0:</b> pitch <b id="o1">0</b>&deg;, roll <b id="o2">0</b>&deg; &middot; sudut mentah sensor: <b id="w1">0</b>&deg; / <b id="w2">0</b>&deg;<br>
+<button id="bk" class="o">Kalibrasi: posisi sekarang = 0&deg;</button> <button id="by0">Nol-kan arah hadap</button><br>
+<button id="f1">Balik depan&harr;belakang</button> <button id="f2">Balik kiri&harr;kanan</button> <button id="f3">Balik putar</button> <button id="f4">Data mentah</button><br>
+<small>Tes arah: miringkan sensor ke DEPAN. Bila yang tertulis malah "belakang", klik Balik. Pengaturan tersimpan di ESP32.</small><br>
+<small>Duduk tegak, lalu klik Kalibrasi. Arah hadap (putar) dihitung dari giroskop saja, jadi lama-lama bisa melayang; klik "Nol-kan" untuk mengulang.</small></div>
+<div id="sl"><label>Sudut mentah, depan (+) / belakang (&minus;): <b id="lp">8</b>&deg;<input id="sp" type="range" min="-45" max="75" value="8"></label>
+<label>Sudut mentah, kanan (+) / kiri (&minus;): <b id="lr">0</b>&deg;<input id="sr" type="range" min="-45" max="45" value="0"></label>
+<label>Putar badan, kanan (+) / kiri (&minus;): <b id="ly">0</b>&deg;<input id="sy" type="range" min="-180" max="180" value="0"></label>
+<small>Simulasi: sensor terpasang agak miring 8&deg;. Klik Kalibrasi dan sudut menjadi 0&deg;.</small></div>
+</div><div class="card"><b>Pesan dari ESP32</b><pre id="lg">(belum tersambung)</pre>
+<small>Mode USB: tutup dulu Serial Monitor Arduino, pakai Chrome/Edge.</small></div></div>
+<div class="row"><div class="card"><b>Model 3D sensor (seperti flight controller)</b><canvas id="c1" width="320" height="320"></canvas>
+<small>Panah merah = depan, biru = kanan, hijau = atas. Garis putus-putus = posisi lurus.</small></div>
+<div class="card"><b>Penunjuk bola (tengah = lurus)</b><canvas id="c3" width="320" height="320"></canvas></div>
+<div class="card"><b>Tampak samping orang duduk</b><canvas id="c2" width="420" height="320"></canvas></div></div>
+</div><script>
+const P_ON=20,P_OFF=15,R_ON=15,R_OFF=10,HOLD=10000,D2R=Math.PI/180,$=id=>document.getElementById(id);
+let n=0,last=0,mode='sim',rawP=8,rawR=0,rawY=0,p0=0,r0=0,y0=0,pitch=0,roll=0,yaw=0,over=false,alarm=false,t0=0,ext={alarm:0,hold:0},writer=null;
+const trail=[];
+const sl=(id,f)=>$(id).oninput=e=>{f(+e.target.value);$('l'+id[1]).textContent=e.target.value};
+sl('sp',v=>rawP=v);sl('sr',v=>rawR=v);sl('sy',v=>rawY=v);
+$('bs').onclick=()=>{mode='sim';$('sl').style.opacity=1};
+async function send(ch,msg){
+  if(!writer){log('# Belum tersambung ke ESP32');return}
+  await writer.write(new TextEncoder().encode(ch+'\n'));log(msg)}
+$('bk').onclick=()=>{trail.length=0;
+  if(mode==='sim'){p0=rawP;r0=rawR;y0=rawY;over=false;alarm=false}else send('C','# Kalibrasi dikirim. Duduk tegak, diam 1 detik.')};
+$('by0').onclick=()=>{if(mode==='sim')y0=rawY;else send('Y','# Arah hadap di-nol-kan')};
+$('f1').onclick=()=>send('P','# Perintah: balik depan-belakang');
+$('f2').onclick=()=>send('R','# Perintah: balik kiri-kanan');
+$('f3').onclick=()=>send('T','# Perintah: balik putar');
+$('f4').onclick=()=>send('D','# Perintah: data mentah');
+function td(p,r){const a=p*D2R,b=r*D2R,c=Math.max(-1,Math.min(1,Math.cos(a)*Math.cos(b)));
+  return [Math.acos(c)/D2R,(Math.atan2(Math.cos(a)*Math.sin(b),Math.sin(a))/D2R+360)%360]}
+const NM=['depan','serong kanan-depan','kanan','serong kanan-belakang','belakang','serong kiri-belakang','kiri','serong kiri-depan'];
+function logic(now){
+  const T=td(pitch,roll)[0],bad=T>20,good=T<15;
+  if(bad){if(!over){over=true;t0=now}if(!alarm&&now-t0>=HOLD)alarm=true}
+  else if(good){over=false;alarm=false}else if(!alarm)over=false}
+function log(l){const e=$('lg');const a=e.textContent.startsWith('(')?[]:e.textContent.split('\n');a.push(l);e.textContent=a.slice(-10).join('\n')}
+function parse(l){
+  if(!l)return;
+  if(l[0]==='#'){log(l);if(l.includes('Kalibrasi selesai'))trail.length=0;return}
+  const m={};for(const q of l.matchAll(/([a-z0-9]+):\s*(-?[0-9.]+)/gi))m[q[1]]=parseFloat(q[2]);
+  if(!isNaN(m.pitch)&&!isNaN(m.roll)){n++;last=performance.now();pitch=m.pitch;roll=m.roll;yaw=m.yaw||0;ext.alarm=m.alarm||0;ext.hold=m.hold||0;if(!isNaN(m.p0)){p0=m.p0;r0=m.r0}}}
+$('bc').onclick=async()=>{
+  if(!navigator.serial){alert('Gunakan Chrome atau Edge di komputer.');return}
+  try{
+    const port=await navigator.serial.requestPort();await port.open({baudRate:115200});
+    mode='ser';pitch=roll=yaw=0;n=0;$('sl').style.opacity=.3;writer=port.writable.getWriter();
+    log('# Tersambung. Tekan EN di ESP32 bila belum ada data.');
+    const dec=new TextDecoderStream();port.readable.pipeTo(dec.writable);
+    const rd=dec.readable.getReader();let buf='';
+    for(;;){const {value,done}=await rd.read();if(done)break;buf+=value;let i;
+      while((i=buf.indexOf('\n'))>=0){parse(buf.slice(0,i).trim());buf=buf.slice(i+1)}}
+  }catch(e){log('# Gagal: '+e.message+' (port dipakai program lain?)')}};
+function limb(c,x1,y1,x2,y2,col,w){c.strokeStyle=col;c.lineWidth=w;c.lineCap='round';c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.stroke()}
+function dash(c,x1,y1,x2,y2,col){c.setLineDash([6,5]);limb(c,x1,y1,x2,y2,col,1.5);c.setLineDash([])}
+/* ---------- model 3D ---------- */
+const V=[[0,1.4],[0.8,-0.8],[0,-0.4],[-0.8,-0.8]];
+function rot(p,P,R,Y){let [x,y,z]=p;
+  [x,y]=[x*Math.cos(R)+y*Math.sin(R),-x*Math.sin(R)+y*Math.cos(R)];      // roll: kanan turun
+  [y,z]=[y*Math.cos(P)-z*Math.sin(P),y*Math.sin(P)+z*Math.cos(P)];       // pitch: depan turun
+  [x,z]=[x*Math.cos(Y)+z*Math.sin(Y),-x*Math.sin(Y)+z*Math.cos(Y)];      // yaw: hadap kanan
+  return [x,y,z]}
+function cam(p){let [x,y,z]=p;const a=-0.5,b=-0.35;
+  [x,z]=[x*Math.cos(a)+z*Math.sin(a),-x*Math.sin(a)+z*Math.cos(a)];
+  [y,z]=[y*Math.cos(b)-z*Math.sin(b),y*Math.sin(b)+z*Math.cos(b)];
+  const s=480/(z+6);return [160+x*s,185-y*s,z]}
+function faces(P,R,Y){const top=[],bot=[];
+  V.forEach(v=>{top.push(rot([v[0],0.12,v[1]],P,R,Y));bot.push(rot([v[0],-0.12,v[1]],P,R,Y))});
+  const F=[{v:top,k:'t'},{v:bot,k:'b'}];
+  for(let i=0;i<4;i++){const j=(i+1)%4;F.push({v:[top[i],top[j],bot[j],bot[i]],k:'s'})}return F}
+function paint(c,F,col,ghost){
+  const G=F.map(f=>{const q=f.v.map(cam);return {q,k:f.k,z:q.reduce((s,p)=>s+p[2],0)/q.length}}).sort((a,b)=>b.z-a.z);
+  G.forEach(f=>{c.beginPath();f.q.forEach((p,i)=>i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1]));c.closePath();
+    if(ghost){c.setLineDash([4,3]);c.strokeStyle='#9aa8aa';c.lineWidth=1;c.stroke();c.setLineDash([]);return}
+    c.fillStyle=f.k==='t'?col:f.k==='b'?'#2b3b3f':'#1f5f5b';c.fill();c.strokeStyle='#0004';c.lineWidth=1;c.stroke()})}
+function draw3d(col){
+  const c=$('c1').getContext('2d');c.clearRect(0,0,320,320);
+  c.strokeStyle='#cfd9da';c.lineWidth=1;c.beginPath();
+  for(let i=0;i<=48;i++){const t=i/48*6.2832,q=cam([1.8*Math.sin(t),-0.5,1.8*Math.cos(t)]);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])}c.stroke();
+  paint(c,faces(0,0,0),'',true);
+  const P=pitch*D2R,R=roll*D2R,Y=yaw*D2R;paint(c,faces(P,R,Y),col,false);
+  [[[0,0,2.1],'#d9382a','DEPAN'],[[1.35,0,0],'#378ADD','KANAN'],[[0,1.0,0],'#3d9a5b','ATAS']].forEach(a=>{
+    const o=cam(rot([0,0,0],P,R,Y)),e=cam(rot(a[0],P,R,Y));limb(c,o[0],o[1],e[0],e[1],a[1],3);
+    c.fillStyle=a[1];c.font='bold 11px system-ui';c.fillText(a[2],e[0]+4,e[1]-4)})}
+/* ---------- orang duduk, tampak samping ---------- */
+function side(col){
+  const c=$('c2').getContext('2d');c.clearRect(0,0,420,320);
+  const hx=170,hy=220,L=120,a=pitch*D2R;
+  limb(c,40,290,390,290,'#8a9a9c',3);limb(c,hx-35,hy-130,hx-35,hy+5,'#8a9a9c',5);
+  limb(c,hx-35,hy+5,hx+95,hy+5,'#8a9a9c',5);limb(c,hx+95,hy+5,hx+95,285,'#8a9a9c',4);
+  limb(c,hx,hy,hx,hy-L,'#dfe8e8',22);dash(c,hx,hy,hx,hy-L-25,'#7a8a8c');
+  const t=20*D2R;dash(c,hx,hy,hx+(L+25)*Math.sin(t),hy-(L+25)*Math.cos(t),'#d9382a');
+  limb(c,hx,hy,hx+90,hy,'#9fb3b5',16);limb(c,hx+90,hy,hx+90,hy+60,'#9fb3b5',14);
+  const ex=hx+L*Math.sin(a),ey=hy-L*Math.cos(a);
+  limb(c,hx,hy,ex,ey,col,22);c.fillStyle=col;c.beginPath();c.arc(ex+16*Math.sin(a),ey-16*Math.cos(a),15,0,7);c.fill();
+  c.save();c.translate(hx+0.3*L*Math.sin(a)-11*Math.cos(a),hy-0.3*L*Math.cos(a)-11*Math.sin(a));c.rotate(a);c.fillStyle='#d96620';c.fillRect(-5,-9,10,18);c.restore();
+  c.fillStyle='#1f2d30';c.font='bold 16px system-ui';c.fillText(pitch.toFixed(1)+'°',ex+22,ey-8);
+  c.font='12px system-ui';c.fillStyle='#7a8a8c';c.fillText('0° (lurus)',hx-70,hy-L-28);c.fillStyle='#d9382a';c.fillText('batas 20°',hx+30,hy-L-30);
+  c.fillStyle='#d96620';c.fillText('■ sensor MPU6050',20,20);c.fillStyle='#7a8a8c';c.fillText('depan →',340,40)}
+/* ---------- penunjuk bola ---------- */
+function bub(col){
+  const c=$('c3').getContext('2d');c.clearRect(0,0,320,320);const cx=160,cy=160,s=4;
+  c.strokeStyle='#c5d0d1';c.lineWidth=1;[10,20,30].forEach(d=>{c.beginPath();c.arc(cx,cy,d*s,0,7);c.stroke()});
+  c.setLineDash([5,4]);c.strokeStyle='#d9382a';c.beginPath();c.arc(cx,cy,20*s,0,7);c.stroke();c.setLineDash([]);
+  limb(c,20,cy,300,cy,'#dde5e6',1);limb(c,cx,20,cx,300,'#dde5e6',1);
+  c.fillStyle='#5c6b6e';c.font='12px system-ui';c.textAlign='center';
+  c.fillText('DEPAN',cx,14);c.fillText('BELAKANG',cx,314);c.fillText('KIRI',22,cy+4);c.fillText('KANAN',298,cy+4);
+  const [T,G]=td(pitch,roll),rr=Math.min(T,34)*s,x=cx+rr*Math.sin(G*D2R),y=cy-rr*Math.cos(G*D2R);
+  trail.push([x,y]);if(trail.length>150)trail.shift();
+  c.strokeStyle=col;c.globalAlpha=.4;c.lineWidth=2;c.beginPath();trail.forEach((q,i)=>i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]));c.stroke();c.globalAlpha=1;
+  c.fillStyle='#3d9a5b';c.fillRect(cx-3,cy-3,6,6);
+  c.fillStyle=col;c.beginPath();c.arc(x,y,9,0,7);c.fill();c.strokeStyle='#fff';c.lineWidth=2;c.stroke()}
+/* ---------- bahasa awam ---------- */
+const sg=v=>(v>=0?'+':'')+v.toFixed(1)+'°';
+function kalimat(){const [T,G]=td(pitch,roll);return T<2?'Badan LURUS (0°)':'Badan miring '+Math.round(T)+'° ke '+NM[Math.round(G/45)%8]}
+function jamTeks(){const [T,G]=td(pitch,roll);if(T<2)return 'Batas alarm: 20° ke segala arah (lingkaran merah putus-putus)';
+  return 'Arah jam '+(Math.round(G/30)%12||12)+' (jam 12 = depan, 3 = kanan, 6 = belakang, 9 = kiri). Batas alarm 20° ke segala arah.'}
+function frame(now){
+  let hold=0;
+  if(mode==='sim'){pitch=rawP-p0;roll=rawR-r0;yaw=rawY-y0;logic(now);hold=over?now-t0:0}
+  else{alarm=!!ext.alarm;over=ext.hold>0;hold=ext.hold*1000}
+  const col=alarm?'#d9382a':over?'#e0a82e':'#3d9a5b';
+  $('st').style.background=col;$('st').textContent=alarm?'ALARM: MEMBUNGKUK LAMA':over?'MULAI MEMBUNGKUK':'NORMAL';
+  $('cs').textContent=mode==='sim'?'Mode simulasi (bukan data sensor)':n?'Data sensor masuk: '+n+' baris, terakhir '+((performance.now()-last)/1000).toFixed(1)+' detik lalu':'Tersambung, MENUNGGU data sensor... (tekan EN di ESP32)';
+  $('say').textContent=kalimat();$('jam').textContent=jamTeks();
+  $('yw').textContent=Math.abs(yaw)<3?'Arah hadap: lurus':'Badan berputar ke '+(yaw>0?'kanan ':'kiri ')+Math.round(Math.abs(yaw))+'° (perkiraan)';
+  $('bp').textContent=sg(pitch);$('br').textContent=sg(roll);$('by').textContent=sg(yaw);
+  $('vt').textContent=alarm?'ALARM':over?(hold/1000).toFixed(1)+' s':'-';
+  $('o1').textContent=p0.toFixed(1);$('o2').textContent=r0.toFixed(1);
+  $('w1').textContent=(pitch+p0).toFixed(1);$('w2').textContent=(roll+r0).toFixed(1);
+  draw3d(col);side(col);bub(col);requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+</script></body></html>
