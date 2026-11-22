@@ -73,11 +73,11 @@ Lapisan IoT: Perception (MPU6050, buzzer) → Processing edge (ESP32) → Networ
 ## Status Progres
 
 - [x] Simulasi Wokwi: ESP32 + MPU6050 + buzzer, hitung sudut, ambang 20°
-- [ ] Timer 10 detik dan kalibrasi posisi tegak
-- [ ] Filter komplementer (akselerometer + giroskop)
-- [ ] Wi-Fi, MQTT, dashboard Node-RED
-- [ ] Perakitan perangkat keras pada sabuk
-- [ ] Pengujian akurasi dan uji pengguna
+- [x] Timer 10 detik dan kalibrasi posisi tegak
+- [x] Filter komplementer (akselerometer + giroskop)
+- [x] Wi-Fi, MQTT, dashboard Node-RED
+- [x] Perakitan perangkat keras pada sabuk
+- [x] Pengujian akurasi dan uji pengguna
 
 ## Menjalankan Simulasi
 
