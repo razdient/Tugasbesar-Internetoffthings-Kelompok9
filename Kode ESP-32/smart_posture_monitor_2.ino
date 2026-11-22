@@ -7,6 +7,7 @@
 #include <math.h>
 #include <WiFi.h>
 #include <esp_now.h>
+#include <esp_wifi.h>
 
 void initNow();   // didefinisikan di bagian komunikasi (di bawah)
 
@@ -238,6 +239,9 @@ void setup() {
 
 // ===== Komunikasi ESP-NOW dengan unit depan =====
 uint8_t FRONT_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};   // FF.. = siaran ke semua; ganti dengan MAC unit depan
+// Jika unit depan terhubung ke WiFi router (gateway MQTT), set channel ini
+// sama dengan channel WiFi router. 0 = auto (cocok untuk ESP-NOW murni tanpa WiFi router).
+#define ESPNOW_WIFI_CHANNEL 0
 const uint8_t MAGIC = 0xA5;
 struct __attribute__((packed)) DataPkt { uint8_t magic, type; float pitch, roll, tilt, brg, yaw, hold, p0, r0; uint8_t flags, th; uint16_t batt_mV; };  // type 1
 struct __attribute__((packed)) CmdPkt  { uint8_t magic, type; char cmd; float val; };                                                          // type 2
@@ -250,12 +254,19 @@ void onRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
 }
 
 void initNow() {
-  WiFi.mode(WIFI_STA); WiFi.disconnect();
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  if (ESPNOW_WIFI_CHANNEL > 0) {
+    esp_wifi_set_channel(ESPNOW_WIFI_CHANNEL, WIFI_SECOND_CHAN_NONE);
+    Serial.printf("# ESP-NOW channel dipaksa ke %d\n", ESPNOW_WIFI_CHANNEL);
+  }
   Serial.printf("# MAC unit belakang: %s\n", WiFi.macAddress().c_str());
   if (esp_now_init() != ESP_OK) { Serial.println("# ERROR: ESP-NOW gagal dimulai"); return; }
   esp_now_register_recv_cb(onRecv);
   esp_now_peer_info_t peer = {};
-  memcpy(peer.peer_addr, FRONT_MAC, 6); peer.channel = 0; peer.encrypt = false;
+  memcpy(peer.peer_addr, FRONT_MAC, 6);
+  peer.channel = ESPNOW_WIFI_CHANNEL;
+  peer.encrypt = false;
   if (esp_now_add_peer(&peer) != ESP_OK) Serial.println("# ERROR: gagal menambah peer unit depan");
 }
 
