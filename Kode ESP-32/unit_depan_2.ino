@@ -1,6 +1,7 @@
-// UNIT DEPAN - ESP32 + LCD 16x2 (I2C, chip PCF8574) + rotary encoder. Tanpa library eksternal.
+// UNIT DEPAN - ESP32 + LCD 16x2 (I2C, chip PCF8574) + rotary encoder. Tanpa library eksternal untuk LCD/encoder.
 // Tugas: menerima data dari unit belakang (ESP-NOW), menampilkannya di LCD, meneruskannya ke USB
-// (agar monitor_postur.html bisa dipakai), dan mengirim perintah ke unit belakang lewat menu.
+// (agar monitor_postur.html bisa dipakai), mengirim perintah ke unit belakang lewat menu,
+// dan meneruskan data ke dashboard web lewat MQTT.
 //
 // Wiring:  LCD  : GND, VCC=5V, SDA=GPIO21, SCL=GPIO22
 //          Encoder (modul KY-040): GND, "+"=3V3 (JANGAN 5V), CLK=GPIO32, DT=GPIO33, SW=GPIO25
@@ -12,7 +13,9 @@
 
 #include <WiFi.h>
 #include <esp_now.h>
+#include <esp_wifi.h>
 #include <Wire.h>
+#include <PubSubClient.h>
 #include <string.h>
 #include <math.h>
 
@@ -21,6 +24,20 @@ const int PIN_CLK = 32, PIN_DT = 33, PIN_SW = 25;
 uint8_t BACK_MAC[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};   // FF.. = siaran; ganti dengan MAC unit belakang
 const uint8_t MAGIC = 0xA5;
 #define DEG "\xDF"                                              // simbol derajat bawaan LCD HD44780
+
+// ===== WiFi + MQTT (gateway ke dashboard web) =====
+const char* WIFI_SSID = "UdinPetot";
+const char* WIFI_PASSWORD = "Admin1234";
+const char* MQTT_SERVER = "broker.hivemq.com";
+const int   MQTT_PORT = 1883;
+const char* MQTT_TOPIC = "smartposture/belt-01/data";
+const char* MQTT_CLIENT_ID = "smart-posture-belt-01-front";
+const char* DEVICE_ID = "belt-01";
+
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
+uint32_t lastMqttAttempt = 0;
+bool wifiReady = false;
 
 struct __attribute__((packed)) DataPkt { uint8_t magic, type; float pitch, roll, tilt, brg, yaw, hold, p0, r0; uint8_t flags, th; uint16_t batt_mV; };  // sama dengan unit belakang
 struct __attribute__((packed)) CmdPkt  { uint8_t magic, type; char cmd; float val; };
@@ -122,23 +139,94 @@ void onLongPress() {
   else mode = PANTAU;
 }
 
+void connectWiFi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.printf("# Menghubungkan WiFi ke %s", WIFI_SSID);
+
+  uint32_t start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < 15000) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiReady = true;
+    Serial.printf("# WiFi terhubung. IP: %s, channel: %d\n", WiFi.localIP().toString().c_str(), WiFi.channel());
+    Serial.println("# PENTING: unit belakang harus berada di channel WiFi yang sama agar ESP-NOW tetap jalan.");
+  } else {
+    wifiReady = false;
+    Serial.println("# WiFi gagal terhubung. MQTT tidak aktif, ESP-NOW tetap dicoba.");
+  }
+}
+
+void ensureMqtt() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  if (mqtt.connected()) return;
+
+  uint32_t now = millis();
+  if (now - lastMqttAttempt < 5000) return;
+  lastMqttAttempt = now;
+
+  Serial.printf("# Menghubungkan MQTT ke %s:%d ... ", MQTT_SERVER, MQTT_PORT);
+  if (mqtt.connect(MQTT_CLIENT_ID)) {
+    Serial.println("berhasil");
+  } else {
+    Serial.printf("gagal rc=%d\n", mqtt.state());
+  }
+}
+
+void publishToDashboard(const DataPkt &d) {
+  if (!mqtt.connected()) return;
+
+  const char* status = (d.flags & 1) ? "Membungkuk" : "Normal";
+  char payload[96];
+  snprintf(payload, sizeof(payload), "{\"sudut\":%.1f,\"status\":\"%s\"}", d.tilt, status);
+
+  bool ok = mqtt.publish(MQTT_TOPIC, payload);
+  if (ok) {
+    Serial.printf("# MQTT publish %s: %s\n", MQTT_TOPIC, payload);
+  } else {
+    Serial.printf("# MQTT publish gagal ke %s\n", MQTT_TOPIC);
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   pinMode(PIN_CLK, INPUT_PULLUP); pinMode(PIN_DT, INPUT_PULLUP); pinMode(PIN_SW, INPUT_PULLUP);
   lastClk = digitalRead(PIN_CLK);
-  lcdInit(); lcdLine(0, "Unit depan"); lcdLine(1, "Menunggu data...");
-  WiFi.mode(WIFI_STA); WiFi.disconnect();
+  lcdInit(); lcdLine(0, "Unit depan"); lcdLine(1, "Menghubungkan...");
+
+  connectWiFi();
+  mqtt.setServer(MQTT_SERVER, MQTT_PORT);
+  mqtt.setBufferSize(256);
+  ensureMqtt();
+
   Serial.printf("# MAC unit depan: %s\n", WiFi.macAddress().c_str());
-  if (esp_now_init() != ESP_OK) { Serial.println("# ERROR: ESP-NOW gagal dimulai"); return; }
+  if (esp_now_init() != ESP_OK) {
+    Serial.println("# ERROR: ESP-NOW gagal dimulai");
+    return;
+  }
   esp_now_register_recv_cb(onRecv);
+
   esp_now_peer_info_t peer = {};
-  memcpy(peer.peer_addr, BACK_MAC, 6); peer.channel = 0; peer.encrypt = false;
+  memcpy(peer.peer_addr, BACK_MAC, 6);
+  peer.channel = WiFi.status() == WL_CONNECTED ? WiFi.channel() : 0;
+  peer.encrypt = false;
   if (esp_now_add_peer(&peer) != ESP_OK) Serial.println("# ERROR: gagal menambah peer unit belakang");
+  else Serial.printf("# ESP-NOW peer ditambahkan (channel %d)\n", peer.channel);
+
   Serial.println("# Unit depan siap. Menunggu data dari unit belakang...");
+  if (lcdAddr) { lcdLine(0, "Menunggu data..."); lcdLine(1, "unit belakang"); }
 }
 
 void loop() {
   uint32_t now = millis();
+
+  ensureMqtt();
+  if (mqtt.connected()) mqtt.loop();
 
   while (Serial.available()) {                  // perintah dari halaman monitor_postur.html diteruskan ke unit belakang
     char ch = Serial.read();
@@ -170,6 +258,8 @@ void loop() {
     else snprintf(txt, sizeof(txt), "miring %d derajat ke %s", (int)roundf(d.tilt), arahTeks(d.brg));
     Serial.printf("Posisi: %s%s | pitch:%.1f,roll:%.1f,tilt:%.1f,brg:%.0f,yaw:%.1f,alarm:%d,hold:%.1f,p0:%.1f,r0:%.1f\n",
                   txt, (d.flags & 1) ? " [ALARM]" : "", d.pitch, d.roll, d.tilt, d.brg, d.yaw, (d.flags & 1) ? 1 : 0, d.hold, d.p0, d.r0);
+
+    publishToDashboard(d);
   }
   if (lastRx && now - lastRx > 2000 && now - lastWarn > 3000) { lastWarn = now; Serial.println("# PERINGATAN: tidak ada data dari unit belakang (cek daya, jarak, antena)"); }
   render(now);
