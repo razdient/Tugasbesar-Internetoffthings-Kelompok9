@@ -40,7 +40,8 @@ class MqttSubscribe extends Command
             $this->info("Terhubung ke MQTT Broker: {$host}:{$port}");
 
             // Subscribe topik data sensor
-            $client->subscribe('posture/+/data', function ($topic, $message) {
+            // Topik format: smartposture/{device_id}/data
+            $client->subscribe('smartposture/+/data', function ($topic, $message) {
                 try {
                     // Tampilkan pesan asli untuk pemeriksaan
                     $this->line("PESAN DATA SENSOR: " . $message);
@@ -49,56 +50,59 @@ class MqttSubscribe extends Command
                     $data = json_decode($message);
 
                     // Periksa format dan kelengkapan data
+                    // Payload ESP32: {"sudut":25,"status":"Membungkuk"}
                     if (
-                    !$data ||
-                    !isset(
-                        $data->device_id,
-                        $data->timestamp,
-                        $data->pitch,
-                        $data->roll,
-                        $data->status
-                    ) ||
-                    !is_string($data->device_id) ||
-                    !is_string($data->timestamp) ||
-                    trim($data->device_id) === '' ||
-                    trim($data->timestamp) === '' ||
-                    !is_numeric($data->pitch) ||
-                    !is_numeric($data->roll) ||
-                    !is_string($data->status) ||
-                    !in_array($data->status, ['normal', 'warning', 'bad'], true)
-                ) {
-                    $this->warn("Data sensor tidak valid dari {$topic}");
-                    return;
-                }
+                        !$data ||
+                        !isset($data->sudut, $data->status) ||
+                        !is_numeric($data->sudut) ||
+                        !is_string($data->status) ||
+                        trim($data->status) === ''
+                    ) {
+                        $this->warn("Data sensor tidak valid dari {$topic}");
+                        return;
+                    }
 
                     // Ambil ID perangkat dari topik MQTT
-                    $topicDeviceId = explode('/', $topic)[1] ?? null;
+                    // Topik format: smartposture/{device_id}/data
+                    $topicDeviceId = trim(explode('/', trim($topic, '/'))[1] ?? '');
 
-                    // Cocokkan ID perangkat pada topik dan JSON
-                    if ($topicDeviceId !== $data->device_id) {
-                        $this->warn("ID perangkat pada topik dan JSON tidak cocok.");
+                    if ($topicDeviceId === '') {
+                        $this->warn("ID perangkat tidak ditemukan pada topik {$topic}");
                         return;
                     }
 
                     // Cari perangkat berdasarkan ID MQTT
-                    $device = Device::where('device_id', $data->device_id)->first();
+                    $device = Device::where('device_id', $topicDeviceId)->first();
 
                     if (!$device) {
-                        $this->warn("Perangkat {$data->device_id} belum terdaftar.");
+                        $this->warn("Perangkat {$topicDeviceId} belum terdaftar.");
                         return;
                     }
-                    
-                    // Periksa dan ubah timestamp
-                    $recordedAt = Carbon::parse($data->timestamp);
-                    
-                    
+
+                    // Petakan status dari firmware ke enum status Laravel
+                    // "Normal" -> "normal", "Membungkuk" -> "warning"
+                    $statusKey = strtolower(trim($data->status));
+                    $statusMap = [
+                        'normal' => 'normal',
+                        'membungkuk' => 'warning',
+                    ];
+                    $status = $statusMap[$statusKey] ?? null;
+
+                    if ($status === null) {
+                        $this->warn("Status tidak dikenal dari {$topic}: {$data->status}");
+                        return;
+                    }
+
+                    // Ambil sudut dari payload ESP32 (derajat)
+                    $angle = (float) $data->sudut;
+
                     // Simpan pembacaan sensor
                     SensorReading::create([
                         'device_id' => $device->id,
-                        'pitch' => $data->pitch,
-                        'roll' => $data->roll,
-                        'status' => $data->status,
-                        'recorded_at' => $recordedAt,
+                        'pitch' => $angle,
+                        'roll' => 0.0,
+                        'status' => $status,
+                        'recorded_at' => now(),
                     ]);
 
                     // Perbarui waktu terakhir perangkat aktif

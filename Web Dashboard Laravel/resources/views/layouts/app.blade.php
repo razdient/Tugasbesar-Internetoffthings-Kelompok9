@@ -1,220 +1,120 @@
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <script>
+        (function () {
+            try {
+                var theme = localStorage.getItem('theme');
+                if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (e) {}
+        })();
+    </script>
     <title>@yield('title', 'Smart Posture Monitor')</title>
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <style>
-        :root {
-            --primary: #1e3a5f;
-            --accent: #3478c9;
-            --bg: #f4f7fb;
-            --text: #26364b;
-        }
-
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: Arial, sans-serif;
-        }
-
-        .sidebar {
-            width: 245px;
-            height: 100vh;
-            position: fixed;
-            background: var(--primary);
-            color: white;
-            padding: 25px 18px;
-        }
-
-        .sidebar h5 {
-            font-weight: bold;
-            letter-spacing: .5px;
-        }
-
-        .sidebar a {
-            display: block;
-            padding: 12px 15px;
-            color: #d8e4f2;
-            text-decoration: none;
-            border-radius: 7px;
-            margin-top: 8px;
-        }
-
-        .sidebar a.active,
-        .sidebar a:hover {
-            background: #2b5687;
-            color: white;
-        }
-
-        .main {
-            margin-left: 245px;
-            padding: 30px;
-        }
-
-        .topbar, .stat-card, .content-card {
-            background: white;
-            border: 1px solid #e4eaf1;
-            border-radius: 10px;
-        }
-
-        .topbar {
-            padding: 18px 22px;
-            margin-bottom: 25px;
-        }
-
-        .stat-card {
-            padding: 22px;
-            height: 100%;
-        }
-
-        .stat-label {
-            color: #7b8ba0;
-            font-size: 13px;
-        }
-
-        .stat-value {
-            color: var(--primary);
-            font-size: 29px;
-            font-weight: bold;
-            margin-top: 10px;
-        }
-
-        .stat-icon {
-            width: 42px;
-            height: 42px;
-            display: grid;
-            place-items: center;
-            background: #e8f1fc;
-            color: var(--accent);
-            border-radius: 9px;
-            font-size: 20px;
-        }
-
-        .content-card {
-            padding: 22px;
-        }
-
-        .content-title {
-            font-size: 17px;
-            font-weight: bold;
-            color: var(--primary);
-            margin-bottom: 18px;
-        }
-
-        .table thead th {
-            background: #f2f6fb;
-            color: #62748a;
-            font-size: 12px;
-        }
-
-        .table td {
-            font-size: 13px;
-            vertical-align: middle;
-        }
-
-        .logout {
-            position: absolute;
-            bottom: 25px;
-            left: 18px;
-            right: 18px;
-        }
-
-        @media(max-width: 768px) {
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-            }
-
-            .logout {
-                position: static;
-                margin-top: 20px;
-            }
-
-            .main {
-                margin-left: 0;
-                padding: 15px;
-            }
-        }
-    </style>
-
-    @stack('styles')
 </head>
+<body class="min-h-screen bg-slate-50 font-sans text-slate-600 antialiased dark:bg-slate-950 dark:text-slate-300">
 
-<body>
+    <div class="flex min-h-screen">
 
-<aside class="sidebar">
-    <h5>SMART POSTURE</h5>
-    <small class="text-white-50">Monitoring System</small>
+        <div id="sidebar"
+             class="fixed inset-y-0 left-0 z-40 flex w-72 shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-300 ease-in-out dark:border-slate-800 dark:bg-slate-900 -translate-x-full md:translate-x-0">
+            <div class="flex h-16 items-center gap-3 border-b border-slate-200 px-5 dark:border-slate-800">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-600 text-white shadow-sm">
+                    <i data-lucide="Activity" class="h-5 w-5"></i>
+                </div>
+                <div>
+                    <p class="text-base font-bold text-slate-900 dark:text-white">Smart Posture</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Monitoring System</p>
+                </div>
+            </div>
 
-    <hr class="border-light opacity-25 my-4">
+            <nav class="flex-1 space-y-1 overflow-y-auto px-4 py-5">
+                @php
+                    $isDashboardActive = request()->routeIs('dashboard') || request()->routeIs('dashboard.data');
+                    $isHistoryActive = request()->routeIs('history') || request()->routeIs('history.export');
+                @endphp
 
-    <small class="text-white-50">MENU UTAMA</small>
+                <a href="{{ route('dashboard') }}"
+                   class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 {{ $isDashboardActive ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/60 dark:text-primary-300' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/70 dark:hover:text-white' }}">
+                    <i data-lucide="LayoutDashboard" class="h-5 w-5"></i>
+                    <span>Dashboard</span>
+                </a>
 
-    <a href="{{ route('dashboard') }}"
-       class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">
-        Dashboard
-    </a>
+                <a href="{{ route('dashboard') }}#grafik"
+                   class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/70 dark:hover:text-white">
+                    <i data-lucide="Activity" class="h-5 w-5"></i>
+                    <span>Monitoring Sensor</span>
+                </a>
 
-    <a href="{{ route('dashboard') }}#grafik">
-        Monitoring Sensor
-    </a>
+                <a href="{{ route('dashboard') }}#riwayat"
+                   class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/70 dark:hover:text-white">
+                    <i data-lucide="AlertTriangle" class="h-5 w-5"></i>
+                    <span>Riwayat Postur</span>
+                </a>
 
-    <a href="{{ route('dashboard') }}#riwayat">
-        Riwayat Postur
-    </a>
+                <a href="{{ route('history') }}"
+                   class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 {{ $isHistoryActive ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/60 dark:text-primary-300' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/70 dark:hover:text-white' }}">
+                    <i data-lucide="History" class="h-5 w-5"></i>
+                    <span>Riwayat Data Sensor</span>
+                </a>
+            </nav>
 
-    <a href="{{ route('history') }}"
-       class="{{ request()->routeIs('history') ? 'active' : '' }}">
-        Riwayat Data Sensor
-    </a>
-
-    <div class="logout">
-        <small class="text-white-50 d-block mb-2">
-            {{ auth()->user()->name }}
-        </small>
-
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-            <button class="btn btn-outline-light btn-sm w-100">
-                Logout
-            </button>
-        </form>
-    </div>
-</aside>
-
-<main class="main">
-
-    <div class="topbar d-flex justify-content-between align-items-center">
-        <div>
-            <h5 class="fw-bold mb-1">@yield('page-title', 'Dashboard')</h5>
-            <small class="text-secondary">
-                Sistem Monitoring Postur Tubuh Berbasis IoT
-            </small>
+            <div class="border-t border-slate-200 p-4 dark:border-slate-800">
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button type="submit"
+                            class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-slate-100 hover:text-rose-600 dark:text-slate-400 dark:hover:bg-slate-800/70 dark:hover:text-rose-400">
+                        <i data-lucide="LogOut" class="h-5 w-5"></i>
+                        <span>Logout</span>
+                    </button>
+                </form>
+            </div>
         </div>
 
-        <small class="text-secondary">
-            {{ now()->timezone('Asia/Jakarta')->format('d M Y') }}
-        </small>
+        <div id="sidebar-backdrop"
+             class="pointer-events-none fixed inset-0 z-30 bg-slate-950/40 opacity-0 transition-opacity duration-300 md:hidden"></div>
+
+        <div class="flex min-h-screen flex-1 flex-col md:pl-72">
+            <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
+                <div class="flex h-16 items-center gap-3 px-4 sm:px-6">
+                    <button id="sidebar-toggle"
+                            type="button"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 md:hidden dark:text-slate-300 dark:hover:bg-slate-800">
+                        <i data-lucide="Menu" class="h-5 w-5"></i>
+                    </button>
+
+                    <div class="flex-1"></div>
+
+                    <button id="theme-toggle"
+                            type="button"
+                            aria-label="Ganti tema"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800">
+                        <i data-lucide="Moon" class="h-5 w-5 dark:hidden"></i>
+                        <i data-lucide="Sun" class="hidden h-5 w-5 dark:block"></i>
+                    </button>
+
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-700 dark:bg-primary-950/60 dark:text-primary-300">
+                            {{ strtoupper(substr(auth()->user()->name ?? 'U', 0, 2)) }}
+                        </div>
+                        <div class="hidden sm:block">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ auth()->user()->name }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Smart Posture Monitor</p>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+                @yield('content')
+            </main>
+        </div>
     </div>
 
-    @yield('content')
+    <div id="toast-root" class="fixed bottom-4 right-4 z-50 flex w-full max-w-sm flex-col gap-2"></div>
 
-    <div class="text-center text-secondary small mt-4">
-        Smart Posture Monitor © 2026
-    </div>
-
-</main>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
-
-@stack('scripts')
-
+    @stack('scripts')
 </body>
 </html>
