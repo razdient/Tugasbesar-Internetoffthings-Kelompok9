@@ -2,7 +2,7 @@
 
 return [
     // Alamat MQTT Broker
-    'host' => env('MQTT_HOST', '127.0.0.1'),
+    'host' => env('MQTT_HOST', 'broker.hivemq.com'),
 
     // Port MQTT lokal
     'port' => (int) env('MQTT_PORT', 1883),

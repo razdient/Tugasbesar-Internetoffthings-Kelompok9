@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Device;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -15,11 +16,22 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $user = User::query()->firstOrCreate(
+            ['email' => 'test@example.com'],
+            [
+                'name' => 'Test User',
+                'password' => 'password',
+            ]
+        );
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        Device::query()->firstOrCreate(
+            ['device_id' => 'belt-01'],
+            [
+                'user_id' => $user->id,
+                'name' => 'Smart Posture Belt 01',
+                'angle_threshold' => 20,
+                'duration_threshold' => 10,
+            ]
+        );
     }
 }
